@@ -11,6 +11,7 @@ public class GameController : MonoBehaviour
     public List<GameObject> ballPrefabs;
     public Button resetButton;
     public GameObject WinUI;
+    public float moveDelayBetweenBalls = 0.1f;
 
     [Header("Generation Settings")]
     public int tubeCount = 5;
@@ -21,12 +22,18 @@ public class GameController : MonoBehaviour
     public float selectAnimDuration = 0.2f;
     public float moveToTubeDuration = 0.3f;
     public float moveIntoTubeDuration = 0.2f;
+    
+    [Header("Screen Settings")]
+    public ScreenManager screenManager;
 
     private GameObject selectedBall = null;
     private Vector3 selectedBallOriginalPos;
 
     private Tube selectedTube = null;
     private List<List<Color>> initialSetup;
+    private List<MovingBall> activeMoves = new List<MovingBall>();
+    private Tube pendingFromTube = null;
+    private List<GameObject> pendingBalls = new List<GameObject>();
 
     void Start()
     {
@@ -36,6 +43,7 @@ public class GameController : MonoBehaviour
 
     void Update()
     {
+        UpdateActiveMoves();
         HandlePlayerInput();    //xử lý input của người chơi
     }
 
@@ -57,6 +65,9 @@ public class GameController : MonoBehaviour
         EnsureSolvable();   //không để game dễ QUÁ
         StartCoroutine(AutoSolveAndGenerate()); //tự động giả và kiểm tra màn chơi
         SaveInitialSetup(); //lưu trạng thái để reset
+        // Sau khi tạo xong các ống
+        if (screenManager != null)
+            screenManager.AdjustCameraAndLayout();
     }
 
     List<GameObject> CreateAndShuffleBalls()
@@ -177,40 +188,86 @@ public class GameController : MonoBehaviour
     {
         if (selectedTube == null)
         {
-            if (!tube.IsEmpty)
+            if (!tube.IsEmpty && !IsBallMovingFromTube(tube))
             {
                 selectedTube = tube;
                 selectedBall = tube.balls.Last();
                 selectedBallOriginalPos = selectedBall.transform.position;
-                //animation chọn bóng
-                StartCoroutine(AnimateBallSelect(selectedBall, tube.GetTopPosition()));
+                AddMoveAnimation(selectedBall, tube.GetTopPosition(), selectAnimDuration);
             }
         }
         else if (selectedTube == tube)
         {
-            // Bỏ chọn - đưa bóng về vị trí cũ
-            StartCoroutine(AnimateBallDeselect(selectedBall, selectedBallOriginalPos));
+            AddMoveAnimation(selectedBall, selectedBallOriginalPos, selectAnimDuration);
             selectedTube = null;
             selectedBall = null;
         }
         else
         {
-            // Nếu di chuyển hợp lệ
             if (IsValidMove(selectedTube, tube))
             {
-                // Lấy danh sách bóng có thể di chuyển
                 List<GameObject> ballsToMove = GetMovableBalls(selectedTube, tube);
-                // Animation di chuyển nhiều bóng
-                StartCoroutine(AnimateMultipleBallsMove(selectedTube, tube, ballsToMove));
+                StartCoroutine(ExecuteMove(selectedTube, tube, ballsToMove));
             }
             else
             {
-                // Nếu không hợp lệ, bỏ chọn
-                StartCoroutine(AnimateBallDeselect(selectedBall, selectedBallOriginalPos));
+                AddMoveAnimation(selectedBall, selectedBallOriginalPos, selectAnimDuration);
             }
             selectedTube = null;
             selectedBall = null;
         }
+    }
+    bool IsBallMovingFromTube(Tube tube)
+    {
+        foreach (var move in activeMoves)
+        {
+            if (tube.balls.Contains(move.ball))
+                return true;
+        }
+        return false;
+    }
+    void AddMoveAnimation(GameObject ball, Vector3 targetPos, float duration)
+    {
+        activeMoves.Add(new MovingBall(ball, targetPos, duration));
+    }
+    
+    IEnumerator ExecuteMove(Tube fromTube, Tube toTube, List<GameObject> ballsToMove)
+    {
+        // Danh sách các bóng đang di chuyển
+        List<GameObject> movingBalls = new List<GameObject>();
+    
+        foreach (GameObject ball in ballsToMove)
+        {
+            // 1. Cập nhật trạng thái NGAY KHI BẮT ĐẦU di chuyển
+            fromTube.balls.Remove(ball);
+            toTube.balls.Add(ball);
+            ball.transform.SetParent(toTube.transform);
+        
+            // 2. Bay lên miệng ống nguồn
+            Vector3 tubeTopPos = fromTube.GetTopPosition();
+            AddMoveAnimation(ball, tubeTopPos, selectAnimDuration);
+            movingBalls.Add(ball);
+        
+            yield return new WaitUntil(() => activeMoves.Find(m => m.ball == ball) == null);
+        
+            // 3. Di chuyển sang miệng ống đích
+            Vector3 targetTopPos = toTube.GetTopPosition();
+            AddMoveAnimation(ball, targetTopPos, moveToTubeDuration);
+        
+            yield return new WaitUntil(() => activeMoves.Find(m => m.ball == ball) == null);
+        
+            // 4. Rơi vào vị trí trong ống đích
+            Vector3 finalPos = toTube.GetBallPosition(toTube.balls.Count - 1);
+            AddMoveAnimation(ball, finalPos, moveIntoTubeDuration);
+        
+            if (ball != ballsToMove.Last())
+                yield return new WaitForSeconds(moveDelayBetweenBalls);
+        }
+    
+        yield return new WaitUntil(() => activeMoves.Count == 0);
+    
+        if (CheckWinCondition())
+            WinUI.SetActive(true);
     }
     
     List<GameObject> GetMovableBalls(Tube fromTube, Tube toTube)
@@ -329,6 +386,17 @@ public class GameController : MonoBehaviour
     
         ball.transform.position = targetPos;
     }
+
+    void UpdateActiveMoves()
+    {
+        for (int i = activeMoves.Count - 1; i >= 0; i--)
+        {
+            if (activeMoves[i].Update())
+            {
+                activeMoves.RemoveAt(i);
+            }
+        }
+    }
     #endregion
 
     #region Reset System
@@ -406,15 +474,49 @@ public class GameController : MonoBehaviour
             prefab.GetComponent<SpriteRenderer>().color.Equals(color));
     }
 
-    bool IsValidMove(Tube from, Tube to)
+    bool IsValidMove(Tube fromTube, Tube toTube)
     {
-        if (from.IsEmpty || to.IsFull) return false;
+        // Kiểm tra nếu có bóng từ ống nguồn đang di chuyển đến ống đích
+        if (IsAnyBallMovingBetweenTubes(fromTube, toTube))
+            return false;
+        
+        if (fromTube.IsEmpty || toTube.IsFull) 
+            return false;
     
-        // Nếu ống đích rỗng, có thể di chuyển bất kỳ bóng nào
-        if (to.IsEmpty) return true;
+        // Lấy màu thực tế (bao gồm cả bóng đang di chuyển)
+        Color fromColor = GetActualTopColor(fromTube);
+        Color toColor = GetActualTopColor(toTube);
     
-        // Chỉ di chuyển được nếu màu trùng với bóng trên cùng ống đích
-        return from.TopColor.Equals(to.TopColor);
+        if (toTube.IsEmpty) 
+            return true;
+        
+        return fromColor.Equals(toColor);
+    }
+
+    bool IsAnyBallMovingBetweenTubes(Tube fromTube, Tube toTube)
+    {
+        foreach (var move in activeMoves)
+        {
+            // Nếu có bóng đang di chuyển từ ống nguồn đến ống đích
+            if (fromTube.balls.Contains(move.ball) && move.targetPosition == toTube.GetTopPosition())
+                return true;
+        }
+        return false;
+    }
+
+    Color GetActualTopColor(Tube tube)
+    {
+        // Kiểm tra nếu có bóng đang di chuyển đến ống này
+        foreach (var move in activeMoves)
+        {
+            if (move.targetPosition == tube.GetBallPosition(tube.balls.Count))
+            {
+                return move.ball.GetComponent<SpriteRenderer>().color;
+            }
+        }
+    
+        // Nếu không có bóng đang di chuyển đến, trả về màu hiện tại
+        return tube.TopColor;
     }
 
     bool CheckWinCondition()
@@ -530,4 +632,38 @@ public class GameController : MonoBehaviour
         }
     }
     #endregion
+}
+public class MovingBall
+{
+    public GameObject ball;
+    public Vector3 targetPosition;
+    public float duration;
+    public float elapsed;
+    public bool isCompleted;
+    
+    public MovingBall(GameObject ball, Vector3 target, float duration)
+    {
+        this.ball = ball;
+        this.targetPosition = target;
+        this.duration = duration;
+        this.elapsed = 0f;
+        this.isCompleted = false;
+    }
+    
+    public bool Update()
+    {
+        if (isCompleted) return true;
+        
+        elapsed += Time.deltaTime;
+        float t = Mathf.Clamp01(elapsed / duration);
+        ball.transform.position = Vector3.Lerp(ball.transform.position, targetPosition, t);
+        
+        if (elapsed >= duration)
+        {
+            ball.transform.position = targetPosition;
+            isCompleted = true;
+            return true;
+        }
+        return false;
+    }
 }

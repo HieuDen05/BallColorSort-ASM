@@ -857,7 +857,7 @@ Camera:
   far clip plane: 1000
   field of view: 34
   orthographic: 1
-  orthographic size: 5
+  orthographic size: 8.670898
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -1449,8 +1449,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1047457654}
-  - component: {fileID: 1047457655}
   - component: {fileID: 1047457656}
+  - component: {fileID: 1047457657}
   m_Layer: 0
   m_Name: BallSort
   m_TagString: Untagged
@@ -1473,35 +1473,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1047457655
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1047457652}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2cb713f5d33b2ca4cb1d00664412544b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  tubes:
-  - {fileID: 304116868}
-  - {fileID: 1515461935}
-  - {fileID: 327697769}
-  - {fileID: 577862466}
-  - {fileID: 613254698}
-  ballPrefabs:
-  - {fileID: 2423707722164957348, guid: 9c76ccd2b8075f841bd0b53d9d036c60, type: 3}
-  - {fileID: 4797311443879574757, guid: 420a57c40cd890c4bbc282145cbfeb2c, type: 3}
-  - {fileID: 3473180572460950123, guid: 0269d1f93b5e7644989e608b761ba6da, type: 3}
-  - {fileID: 4055116471721297500, guid: e1b2eb318504f0e4490ebbe8b1f0815c, type: 3}
-  resetButton: {fileID: 53581138}
-  WinUI: {fileID: 1628955851}
-  scrambleMoves: 10
-  tubeCount: 5
-  ballsPerTube: 4
-  colorCount: 4
 --- !u!114 &1047457656
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1527,12 +1498,31 @@ MonoBehaviour:
   - {fileID: 4055116471721297500, guid: e1b2eb318504f0e4490ebbe8b1f0815c, type: 3}
   resetButton: {fileID: 53581138}
   WinUI: {fileID: 1628955851}
+  moveDelayBetweenBalls: 0.1
   tubeCount: 5
   ballsPerTube: 4
   colorCount: 4
   selectAnimDuration: 0.2
   moveToTubeDuration: 0.3
   moveIntoTubeDuration: 0.2
+  screenManager: {fileID: 1047457657}
+--- !u!114 &1047457657
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1047457652}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e581c0ca7b349d49c99fffa6c0237b8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  minHorizontalPadding: 1.5
+  verticalPadding: 2
+  tubeSpacing: 2
+  gameCamera: {fileID: 519420031}
+  tubesContainer: {fileID: 992042362}
 --- !u!1 &1132397988
 GameObject:
   m_ObjectHideFlags: 0
@@ -2082,7 +2072,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1047457655}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: BallSorter, Assembly-CSharp
         m_MethodName: PlayAgain
         m_Mode: 1
