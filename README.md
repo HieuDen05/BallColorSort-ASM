@@ -1,5 +1,3 @@
-# BallColorSort-ASM
-A simple Ball Color Sort scene
 # Ball Color Sort - ASM
 
 ## Mô tả Game
